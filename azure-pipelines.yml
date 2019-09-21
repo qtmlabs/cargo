@@ -16,4 +16,9 @@ steps:
     source ~/.cargo/env
     cargo build --release
   displayName: 'Build cargo'
+- script: |
+    git clone --depth=1 https://github.com/pgdurand/github-release-api.git api
+    ./api/github_release_manager.sh -l msizanoen1 -t $GITHUB_TOKEN -o msizanoen1 -r ghc-comp -d cargo -c create || true
+    ./api/github_release_manager.sh -l msizanoen1 -t $GITHUB_TOKEN -o msizanoen1 -r ghc-comp -d cargo -c upload cargo
+  displayName: 'Upload artifacts'
 - publish: target/release/cargo
