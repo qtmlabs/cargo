@@ -491,6 +491,7 @@ fn compute_metadata<'a, 'cfg>(
     // just here for rustbuild. We need a more principled method
     // doing this eventually.
     let bcx = &cx.bcx;
+    let dual_proc_macro = bcx.config.cli_unstable().dual_proc_macros && unit.target.proc_macro();
     let __cargo_default_lib_metadata = env::var("__CARGO_DEFAULT_LIB_METADATA");
     if !(unit.mode.is_any_test() || unit.mode.is_check())
         && (unit.target.is_dylib()
@@ -525,7 +526,7 @@ fn compute_metadata<'a, 'cfg>(
     unit.features.hash(&mut hasher);
 
     // Mix in the target-metadata of all the dependencies of this target.
-    {
+    if !dual_proc_macro {
         let mut deps_metadata = cx
             .dep_targets(unit)
             .iter()
@@ -538,8 +539,10 @@ fn compute_metadata<'a, 'cfg>(
     // Throw in the profile we're compiling with. This helps caching
     // `panic=abort` and `panic=unwind` artifacts, additionally with various
     // settings like debuginfo and whatnot.
-    unit.profile.hash(&mut hasher);
-    unit.mode.hash(&mut hasher);
+    if !dual_proc_macro {
+        unit.profile.hash(&mut hasher);
+        unit.mode.hash(&mut hasher);
+    }
 
     // Throw in the rustflags we're compiling with.
     // This helps when the target directory is a shared cache for projects with different cargo configs,
@@ -547,6 +550,7 @@ fn compute_metadata<'a, 'cfg>(
     let mut hash_flags = |flags: &[String]| {
         // Ignore some flags. These may affect reproducible builds if they affect
         // the path. The fingerprint will handle recompilation if these change.
+        if dual_proc_macro { return; }
         let mut iter = flags.iter();
         while let Some(flag) = iter.next() {
             if flag.starts_with("--remap-path-prefix=") {
@@ -574,12 +578,16 @@ fn compute_metadata<'a, 'cfg>(
     // Artifacts compiled for the host should have a different metadata
     // piece than those compiled for the target, so make sure we throw in
     // the unit's `kind` as well
-    unit.kind.hash(&mut hasher);
+    if !dual_proc_macro {
+        unit.kind.hash(&mut hasher);
+    }
 
     // Finally throw in the target name/kind. This ensures that concurrent
     // compiles of targets in the same crate don't collide.
-    unit.target.name().hash(&mut hasher);
-    unit.target.kind().hash(&mut hasher);
+    if !dual_proc_macro {
+        unit.target.name().hash(&mut hasher);
+        unit.target.kind().hash(&mut hasher);
+    }
 
     bcx.rustc.verbose_version.hash(&mut hasher);
 
