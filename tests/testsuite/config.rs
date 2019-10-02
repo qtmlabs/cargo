@@ -6,7 +6,7 @@ use std::os;
 use std::path::Path;
 
 use cargo::core::{enable_nightly_features, Shell};
-use cargo::util::config::{self, Config};
+use cargo::util::config::{self, Config, SslVersionConfig};
 use cargo::util::toml::{self, VecStringOrBool as VSOB};
 use cargo_test_support::{paths, project, t};
 use serde::Deserialize;
@@ -304,6 +304,11 @@ opt-level = 1
 
 [profile.dev.overrides.bar]
 codegen-units = 9
+
+[profile.no-lto]
+inherits = 'dev'
+dir-name = 'without-lto'
+lto = false
 ",
     );
 
@@ -320,31 +325,14 @@ codegen-units = 9
     let key = toml::ProfilePackageSpec::Spec(::cargo::core::PackageIdSpec::parse("bar").unwrap());
     let o_profile = toml::TomlProfile {
         opt_level: Some(toml::TomlOptLevel("2".to_string())),
-        lto: None,
         codegen_units: Some(9),
-        debug: None,
-        debug_assertions: None,
-        rpath: None,
-        panic: None,
-        overflow_checks: None,
-        incremental: None,
-        overrides: None,
-        build_override: None,
+        ..Default::default()
     };
     overrides.insert(key, o_profile);
     let key = toml::ProfilePackageSpec::Spec(::cargo::core::PackageIdSpec::parse("env").unwrap());
     let o_profile = toml::TomlProfile {
-        opt_level: None,
-        lto: None,
         codegen_units: Some(13),
-        debug: None,
-        debug_assertions: None,
-        rpath: None,
-        panic: None,
-        overflow_checks: None,
-        incremental: None,
-        overrides: None,
-        build_override: None,
+        ..Default::default()
     };
     overrides.insert(key, o_profile);
 
@@ -363,17 +351,21 @@ codegen-units = 9
             overrides: Some(overrides),
             build_override: Some(Box::new(toml::TomlProfile {
                 opt_level: Some(toml::TomlOptLevel("1".to_string())),
-                lto: None,
                 codegen_units: Some(11),
-                debug: None,
-                debug_assertions: None,
-                rpath: None,
-                panic: None,
-                overflow_checks: None,
-                incremental: None,
-                overrides: None,
-                build_override: None
-            }))
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+    );
+
+    let p: toml::TomlProfile = config.get("profile.no-lto").unwrap();
+    assert_eq!(
+        p,
+        toml::TomlProfile {
+            lto: Some(toml::StringOrBool::Bool(false)),
+            dir_name: Some("without-lto".to_string()),
+            inherits: Some("dev".to_string()),
+            ..Default::default()
         }
     );
 }
@@ -832,4 +824,88 @@ i64max = 9223372036854775807
          could not load config key `epos`: \
          invalid value: integer `123456789`, expected i8",
     );
+}
+
+#[cargo_test]
+fn config_get_ssl_version_missing() {
+    write_config(
+        "\
+[http]
+hello = 'world'
+",
+    );
+
+    let config = new_config(&[]);
+
+    assert!(config
+        .get::<Option<SslVersionConfig>>("http.ssl-version")
+        .unwrap()
+        .is_none());
+}
+
+#[cargo_test]
+fn config_get_ssl_version_single() {
+    write_config(
+        "\
+[http]
+ssl-version = 'tlsv1.2'
+",
+    );
+
+    let config = new_config(&[]);
+
+    let a = config
+        .get::<Option<SslVersionConfig>>("http.ssl-version")
+        .unwrap()
+        .unwrap();
+    match a {
+        SslVersionConfig::Single(v) => assert_eq!(&v, "tlsv1.2"),
+        SslVersionConfig::Range(_) => panic!("Did not expect ssl version min/max."),
+    };
+}
+
+#[cargo_test]
+fn config_get_ssl_version_min_max() {
+    write_config(
+        "\
+[http]
+ssl-version.min = 'tlsv1.2'
+ssl-version.max = 'tlsv1.3'
+",
+    );
+
+    let config = new_config(&[]);
+
+    let a = config
+        .get::<Option<SslVersionConfig>>("http.ssl-version")
+        .unwrap()
+        .unwrap();
+    match a {
+        SslVersionConfig::Single(_) => panic!("Did not expect exact ssl version."),
+        SslVersionConfig::Range(range) => {
+            assert_eq!(range.min, Some(String::from("tlsv1.2")));
+            assert_eq!(range.max, Some(String::from("tlsv1.3")));
+        }
+    };
+}
+
+#[cargo_test]
+fn config_get_ssl_version_both_forms_configured() {
+    // this is not allowed
+    write_config(
+        "\
+[http]
+ssl-version = 'tlsv1.1'
+ssl-version.min = 'tlsv1.2'
+ssl-version.max = 'tlsv1.3'
+",
+    );
+
+    let config = new_config(&[]);
+
+    assert!(config.get::<SslVersionConfig>("http.ssl-version").is_err());
+    assert!(config
+        .get::<Option<SslVersionConfig>>("http.ssl-version")
+        .unwrap()
+        .is_none());
 }

@@ -23,7 +23,7 @@ use url::Url;
 use self::ConfigValue as CV;
 use crate::core::profiles::ConfigProfiles;
 use crate::core::shell::Verbosity;
-use crate::core::{CliUnstable, Shell, SourceId, Workspace};
+use crate::core::{nightly_features_allowed, CliUnstable, Shell, SourceId, Workspace};
 use crate::ops;
 use crate::util::errors::{self, internal, CargoResult, CargoResultExt};
 use crate::util::toml as cargo_toml;
@@ -625,6 +625,12 @@ impl Config {
                 .unwrap_or(false);
         self.target_dir = cli_target_dir;
         self.cli_flags.parse(unstable_flags)?;
+
+        if nightly_features_allowed() {
+            if let Some(val) = self.get::<Option<bool>>("unstable.mtime_on_use")? {
+                self.cli_flags.mtime_on_use |= val;
+            }
+        }
 
         Ok(())
     }
@@ -1847,4 +1853,30 @@ pub fn clippy_driver() -> PathBuf {
     env::var("CARGO_CLIPPY_DRIVER")
         .unwrap_or_else(|_| "clippy-driver".into())
         .into()
+}
+
+/// Configuration for `ssl-version` in `http` section
+/// There are two ways to configure:
+///
+/// ```text
+/// [http]
+/// ssl-version = "tlsv1.3"
+/// ```
+///
+/// ```text
+/// [http]
+/// ssl-version.min = "tlsv1.2"
+/// ssl-version.max = "tlsv1.3"
+/// ```
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+pub enum SslVersionConfig {
+    Single(String),
+    Range(SslVersionConfigRange),
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct SslVersionConfigRange {
+    pub min: Option<String>,
+    pub max: Option<String>,
 }

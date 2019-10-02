@@ -47,7 +47,7 @@
 //! `cargo rustc` extra args                   | ✓           | ✓
 //! CompileMode                                | ✓           | ✓
 //! Target Name                                | ✓           | ✓
-//! Target Kind (bin/lib/etc.)                 | ✓           | ✓
+//! Target CompileKind (bin/lib/etc.)          | ✓           | ✓
 //! Enabled Features                           | ✓           | ✓
 //! Immediate dependency’s hashes              | ✓[^1]       | ✓
 //! Target or Host mode                        |             | ✓
@@ -59,7 +59,7 @@
 //! Target flags (test/bench/for_host/edition) | ✓           |
 //! -C incremental=… flag                      | ✓           |
 //! mtime of sources                           | ✓[^3]       |
-//! RUSTFLAGS/RUSTDOCFLAGS                     | ✓           | ✓
+//! RUSTFLAGS/RUSTDOCFLAGS                     | ✓           |
 //!
 //! [^1]: Build script and bin dependencies are not included.
 //!

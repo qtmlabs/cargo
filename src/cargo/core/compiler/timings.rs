@@ -116,12 +116,7 @@ impl<'a, 'cfg> Timings<'a, 'cfg> {
             })
             .collect();
         let start_str = humantime::format_rfc3339_seconds(SystemTime::now()).to_string();
-        let profile = if bcx.build_config.release {
-            "release"
-        } else {
-            "dev"
-        }
-        .to_string();
+        let profile = bcx.build_config.profile_kind.name().to_owned();
 
         Timings {
             config: bcx.config,
@@ -138,7 +133,7 @@ impl<'a, 'cfg> Timings<'a, 'cfg> {
             unit_times: Vec::new(),
             active: HashMap::new(),
             concurrency: Vec::new(),
-            last_cpu_state: State::current().ok(),
+            last_cpu_state: if enabled { State::current().ok() } else { None },
             last_cpu_recording: Instant::now(),
             cpu_usage: Vec::new(),
         }
@@ -301,7 +296,7 @@ impl<'a, 'cfg> Timings<'a, 'cfg> {
 
     /// Save HTML report to disk.
     fn report_html(&self, bcx: &BuildContext<'_, '_>) -> CargoResult<()> {
-        let duration = self.start.elapsed().as_secs() as u32 + 1;
+        let duration = d_as_f64(self.start.elapsed());
         let timestamp = self.start_str.replace(&['-', ':'][..], "");
         let filename = format!("cargo-timing-{}.html", timestamp);
         let mut f = BufWriter::new(File::create(&filename)?);
@@ -314,11 +309,12 @@ impl<'a, 'cfg> Timings<'a, 'cfg> {
         self.write_summary_table(&mut f, duration, bcx)?;
         f.write_all(HTML_CANVAS.as_bytes())?;
         self.write_unit_table(&mut f)?;
+        // It helps with pixel alignment to use whole numbers.
         writeln!(
             f,
             "<script>\n\
              DURATION = {};",
-            duration
+            f64::ceil(duration) as u32
         )?;
         self.write_js_data(&mut f)?;
         write!(
@@ -349,7 +345,7 @@ impl<'a, 'cfg> Timings<'a, 'cfg> {
     fn write_summary_table(
         &self,
         f: &mut impl Write,
-        duration: u32,
+        duration: f64,
         bcx: &BuildContext<'_, '_>,
     ) -> CargoResult<()> {
         let targets: Vec<String> = self
@@ -358,12 +354,12 @@ impl<'a, 'cfg> Timings<'a, 'cfg> {
             .map(|(name, targets)| format!("{} ({})", name, targets.join(", ")))
             .collect();
         let targets = targets.join("<br>");
-        let time_human = if duration > 60 {
-            format!(" ({}m {:02}s)", duration / 60, duration % 60)
+        let time_human = if duration > 60.0 {
+            format!(" ({}m {:.1}s)", duration as u32 / 60, duration % 60.0)
         } else {
             "".to_string()
         };
-        let total_time = format!("{}s{}", duration, time_human);
+        let total_time = format!("{:.1}s{}", duration, time_human);
         let max_concurrency = self.concurrency.iter().map(|c| c.active).max().unwrap();
         let rustc_info = render_rustc_info(bcx);
         write!(
@@ -571,11 +567,7 @@ fn render_rustc_info(bcx: &BuildContext<'_, '_>) -> String {
         .lines()
         .next()
         .expect("rustc version");
-    let requested_target = bcx
-        .build_config
-        .requested_target
-        .as_ref()
-        .map_or("Host", String::as_str);
+    let requested_target = bcx.build_config.requested_kind.short_name(bcx);
     format!(
         "{}<br>Host: {}<br>Target: {}",
         version, bcx.rustc.host, requested_target

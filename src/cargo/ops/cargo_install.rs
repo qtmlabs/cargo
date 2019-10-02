@@ -7,7 +7,7 @@ use failure::{bail, format_err};
 use tempfile::Builder as TempFileBuilder;
 
 use crate::core::compiler::Freshness;
-use crate::core::compiler::{DefaultExecutor, Executor};
+use crate::core::compiler::{CompileKind, DefaultExecutor, Executor};
 use crate::core::resolver::ResolveOpts;
 use crate::core::{Edition, Package, PackageId, PackageIdSpec, Source, SourceId, Workspace};
 use crate::ops;
@@ -256,12 +256,10 @@ fn install_one(
     // anything if we're gonna throw it away anyway.
     let dst = root.join("bin").into_path_unlocked();
     let rustc = config.load_global_rustc(Some(&ws))?;
-    let target = opts
-        .build_config
-        .requested_target
-        .as_ref()
-        .unwrap_or(&rustc.host)
-        .clone();
+    let target = match &opts.build_config.requested_kind {
+        CompileKind::Host => rustc.host.as_str(),
+        CompileKind::Target(target) => target.short_name(),
+    };
 
     // Helper for --no-track flag to make sure it doesn't overwrite anything.
     let no_track_duplicates = || -> CargoResult<BTreeMap<String, Option<PackageId>>> {
@@ -289,7 +287,7 @@ fn install_one(
     } else {
         let tracker = InstallTracker::load(config, root)?;
         let (freshness, _duplicates) =
-            tracker.check_upgrade(&dst, pkg, force, opts, &target, &rustc.verbose_version)?;
+            tracker.check_upgrade(&dst, pkg, force, opts, target, &rustc.verbose_version)?;
         if freshness == Freshness::Fresh {
             let msg = format!(
                 "package `{}` is already installed, use --force to override",
@@ -343,7 +341,7 @@ fn install_one(
     } else {
         let tracker = InstallTracker::load(config, root)?;
         let (_freshness, duplicates) =
-            tracker.check_upgrade(&dst, pkg, force, opts, &target, &rustc.verbose_version)?;
+            tracker.check_upgrade(&dst, pkg, force, opts, target, &rustc.verbose_version)?;
         (Some(tracker), duplicates)
     };
 
@@ -411,7 +409,7 @@ fn install_one(
             vers.map(|s| s.to_string()),
             opts,
             target,
-            rustc.verbose_version,
+            &rustc.verbose_version,
         );
 
         if let Err(e) = remove_orphaned_bins(&ws, &mut tracker, &duplicates, pkg, &dst) {
