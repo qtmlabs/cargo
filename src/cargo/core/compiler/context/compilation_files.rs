@@ -560,10 +560,6 @@ fn compute_metadata<'a, 'cfg>(
 
     bcx.rustc.verbose_version.hash(&mut hasher);
 
-    if let Ok(_) = env::var("QTMLABS_CI_COMPILING_RUSTC") {
-        1337.hash(&mut hasher);
-    }
-
     // Seed the contents of `__CARGO_DEFAULT_LIB_METADATA` to the hasher if present.
     // This should be the release channel, to get a different hash for each channel.
     if let Ok(ref channel) = __cargo_default_lib_metadata {
