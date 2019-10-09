@@ -1487,7 +1487,8 @@ fn self_dependency() {
         .with_stderr(
             "\
 [ERROR] cyclic package dependency: package `test v0.0.0 ([CWD])` depends on itself. Cycle:
-package `test v0.0.0 ([CWD])`",
+package `test v0.0.0 ([CWD])`
+    ... which is depended on by `test v0.0.0 ([..])`",
         )
         .run();
 }
@@ -2613,7 +2614,8 @@ fn cyclic_deps_rejected() {
         .with_stderr(
 "[ERROR] cyclic package dependency: package `a v0.0.1 ([CWD]/a)` depends on itself. Cycle:
 package `a v0.0.1 ([CWD]/a)`
-    ... which is depended on by `foo v0.0.1 ([CWD])`",
+    ... which is depended on by `foo v0.0.1 ([CWD])`
+    ... which is depended on by `a v0.0.1 ([..])`",
         ).run();
 }
 
@@ -4207,8 +4209,7 @@ fn uplift_pdb_of_bin_on_windows() {
     p.cargo("build --bins --examples --tests").run();
     assert!(p.target_debug_dir().join("foo.pdb").is_file());
     assert!(p.target_debug_dir().join("b.pdb").is_file());
-    assert!(!p.target_debug_dir().join("examples/c.pdb").exists());
-    assert_eq!(p.glob("target/debug/examples/c-*.pdb").count(), 1);
+    assert!(p.target_debug_dir().join("examples/c.pdb").exists());
     assert!(!p.target_debug_dir().join("c.pdb").exists());
     assert!(!p.target_debug_dir().join("d.pdb").exists());
 }

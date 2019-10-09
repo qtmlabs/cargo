@@ -313,23 +313,29 @@ pub trait ArgMatchesExt {
         match profile_checking {
             ProfileChecking::Unchecked => {}
             ProfileChecking::Checked => {
-                if specified_profile.is_some() {
-                    if !config.cli_unstable().unstable_options {
-                        failure::bail!("Usage of `--profile` requires `-Z unstable-options`")
-                    }
+                if specified_profile.is_some() && !config.cli_unstable().unstable_options {
+                    failure::bail!("Usage of `--profile` requires `-Z unstable-options`")
                 }
             }
         }
 
         if self._is_present("release") {
-            match specified_profile {
-                None | Some(ProfileKind::Release) => Ok(ProfileKind::Release),
-                _ => failure::bail!("Conflicting usage of --profile and --release"),
+            if !config.cli_unstable().unstable_options {
+                Ok(ProfileKind::Release)
+            } else {
+                match specified_profile {
+                    None | Some(ProfileKind::Release) => Ok(ProfileKind::Release),
+                    _ => failure::bail!("Conflicting usage of --profile and --release"),
+                }
             }
         } else if self._is_present("debug") {
-            match specified_profile {
-                None | Some(ProfileKind::Dev) => Ok(ProfileKind::Dev),
-                _ => failure::bail!("Conflicting usage of --profile and --debug"),
+            if !config.cli_unstable().unstable_options {
+                Ok(ProfileKind::Dev)
+            } else {
+                match specified_profile {
+                    None | Some(ProfileKind::Dev) => Ok(ProfileKind::Dev),
+                    _ => failure::bail!("Conflicting usage of --profile and --debug"),
+                }
             }
         } else {
             Ok(specified_profile.unwrap_or(default))
